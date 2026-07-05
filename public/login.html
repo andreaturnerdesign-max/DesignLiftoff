@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080609">
+<title>Sign in — Design Liftoff</title>
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#080609; --mist:#E7F1F0; --jade:#17aba6; --plum:#7a436e;
+    --ink-65: rgba(8,6,9,0.65); --ink-45: rgba(8,6,9,0.45);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; }
+  body{
+    background:var(--mist); color:var(--ink);
+    font-family:'Inter', system-ui, sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:24px;
+  }
+  .card{
+    max-width:360px; width:100%;
+    display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px;
+    padding:8px;
+  }
+  .brand-mark{
+    width:52px; height:52px; border-radius:14px; background:var(--jade);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .brand-mark svg{ width:28px; height:28px; color:var(--ink); }
+  h1{ font-family:'Space Grotesk', system-ui, sans-serif; font-size:22px; font-weight:700; margin:4px 0 0; letter-spacing:-0.01em; }
+  p{ margin:0; color:var(--ink-65); font-size:14.5px; line-height:1.5; }
+  .btn-slot{ margin-top:8px; min-height:44px; display:flex; justify-content:center; }
+  .denied{ color:var(--plum); font-size:13.5px; line-height:1.5; }
+  .note{ color:var(--ink-45); font-size:12.5px; margin-top:2px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 19 1c0 2.52-.6 8.4-7.43 13.5z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+    </span>
+    <h1>Design Liftoff</h1>
+    <p>This checklist is restricted. Sign in with an approved Google account to continue.</p>
+    <div id="googleSignInBtn" class="btn-slot"></div>
+    <p id="deniedMsg" class="denied" hidden>That Google account isn&#8217;t on the approved list. Try a different account, or contact whoever shared this checklist with you.</p>
+    <p id="errorMsg" class="denied" hidden>Something went wrong verifying that sign-in. Please try again.</p>
+    <p class="note">Sign-in is verified on the server &mdash; not just in this browser.</p>
+  </div>
+
+  <script id="config" data-client-id="__GOOGLE_CLIENT_ID__"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+  (function(){
+    "use strict";
+    var CLIENT_ID = document.getElementById('config').getAttribute('data-client-id');
+    var deniedMsg = document.getElementById('deniedMsg');
+    var errorMsg = document.getElementById('errorMsg');
+
+    // If the server already redirected us here with ?denied=1, show why.
+    var params = new URLSearchParams(window.location.search);
+    if(params.get('denied') === '1') deniedMsg.hidden = false;
+
+    function handleCredentialResponse(response){
+      deniedMsg.hidden = true;
+      errorMsg.hidden = true;
+      fetch('/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential })
+      }).then(function(res){
+        if(res.ok){
+          window.location.href = '/';
+        } else if(res.status === 403){
+          deniedMsg.hidden = false;
+        } else {
+          errorMsg.hidden = false;
+        }
+      }).catch(function(){
+        errorMsg.hidden = false;
+      });
+    }
+
+    function init(){
+      if(!window.google || !google.accounts || !google.accounts.id) return;
+      google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        callback: handleCredentialResponse
+      });
+      google.accounts.id.renderButton(
+        document.getElementById('googleSignInBtn'),
+        { theme: 'outline', size: 'large', shape: 'pill', text: 'signin_with' }
+      );
+    }
+    window.addEventListener('load', init);
+  })();
+  </script>
+</body>
+</html>
