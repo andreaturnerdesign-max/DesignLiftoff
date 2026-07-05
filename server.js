@@ -169,6 +169,7 @@ app.post('/auth/google', async (req, res) => {
       audience: GOOGLE_CLIENT_ID,
     });
   } catch (e) {
+    console.error('Google ID token verification failed:', e.message);
     return res.status(401).json({ ok: false, error: 'invalid_token' });
   }
 
