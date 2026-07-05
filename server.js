@@ -69,13 +69,20 @@ app.post(
   '/webhooks/shopify/orders',
   express.raw({ type: 'application/json', limit: '2mb' }),
   (req, res) => {
-    if (!SHOPIFY_WEBHOOK_SECRET) return res.status(501).json({ error: 'shopify_not_configured' });
-    if (!verifyShopifyWebhook(req)) return res.status(401).json({ error: 'invalid_signature' });
+    if (!SHOPIFY_WEBHOOK_SECRET) {
+      console.warn('Shopify webhook received, but SHOPIFY_WEBHOOK_SECRET is not set - ignoring.');
+      return res.status(501).json({ error: 'shopify_not_configured' });
+    }
+    if (!verifyShopifyWebhook(req)) {
+      console.warn('Shopify webhook signature did not match - check SHOPIFY_WEBHOOK_SECRET matches Shopify exactly.');
+      return res.status(401).json({ error: 'invalid_signature' });
+    }
 
     let order;
     try {
       order = JSON.parse(req.body.toString('utf8'));
     } catch (e) {
+      console.error('Shopify webhook body was not valid JSON:', e.message);
       return res.status(400).json({ error: 'invalid_json' });
     }
 
@@ -83,13 +90,21 @@ app.post(
     // responses, and the rest of this is just bookkeeping.
     res.status(200).json({ ok: true });
 
+    console.log('Shopify webhook verified OK. Order:', order.name || order.id);
+
     const email = order.email || (order.customer && order.customer.email);
-    if (!email) return;
+    if (!email) {
+      console.warn('Shopify order had no email field - cannot grant access. Order:', order.id);
+      return;
+    }
 
     const lineItems = Array.isArray(order.line_items) ? order.line_items : [];
+    const orderProductIds = lineItems.map((li) => String(li.product_id));
+    console.log('Order', order.name || order.id, 'email:', email, 'product IDs:', orderProductIds, 'configured to match:', SHOPIFY_PRODUCT_IDS.length ? SHOPIFY_PRODUCT_IDS : '(any product)');
+
     const purchasedConfiguredProduct =
       SHOPIFY_PRODUCT_IDS.length === 0 || // no product restriction set = any paid order qualifies
-      lineItems.some((li) => SHOPIFY_PRODUCT_IDS.includes(String(li.product_id)));
+      orderProductIds.some((id) => SHOPIFY_PRODUCT_IDS.includes(id));
 
     if (purchasedConfiguredProduct) {
       access
@@ -98,10 +113,14 @@ app.post(
           orderName: order.name,
           productIds: lineItems.map((li) => li.product_id),
         })
+        .then(() => console.log('Granted access to', email, 'from order', order.name || order.id))
         .catch((err) => console.error('Failed to record Shopify-granted access:', err));
+    } else {
+      console.log('Order', order.name || order.id, 'did not match any configured product ID - no access granted.');
     }
   }
 );
+
 
 app.use(express.json());
 app.use(cookieParser());
